@@ -123,8 +123,8 @@ The tools can also verify the CoRIM(CoSWID/CoMID) based upon SPDM measurement ru
 
    ```
    // Create reference measurement json file.
-   CoRimTool.py json_to_cbor -i <unsigned reference json file> -o <unsigned reference cbor file>
-   CoRimTool.py sign -f <unsigned reference cbor file> --key <PEM private key file> --kid <User input KID> --alg <signing algo - ES256|ES384|ES512> -o <signed reference cbor file>
+   CoRimTool.py json_to_cbor -i SampleManifests/SpdmSampleCoMid.json -o SampleManifests/SpdmSampleCoMid.cbor
+   CoRimTool.py sign -f SampleManifests/SpdmSampleCoMid.cbor --key SampleTestKey/ecc-private-key.pem --kid 11 --alg ES256 -o SampleManifests/SpdmSampleCoMid.corim
    ```
 
    Publish signed reference cbor file.
@@ -134,10 +134,10 @@ The tools can also verify the CoRIM(CoSWID/CoMID) based upon SPDM measurement ru
    Collect SPDM measurement binary file.
 
    ```
-   CoRimTool.py verify -f <signed reference cbor file> --key <PEM public key file> --alg <signing algo - ES256|ES384|ES512> -o <unsigned reference cbor file>
-   CoRimTool.py cbor_to_json -i <signed reference cbor file> -o <signed reference json file>
+   CoRimTool.py verify -f SampleManifests/SpdmSampleCoMid.corim --key SampleTestKey/ecc-public-key.pem --alg ES256 -o SampleManifests/SpdmSampleCoMid.corim.cbor
+   CoRimTool.py cbor_to_json -i SampleManifests/SpdmSampleCoMid.corim.cbor -o SampleManifests/SpdmSampleCoMid.corim.jason
    // Collect Measurment Binary, e.g. run spdm_device_attester_sample, and get device_measurement.bin.
-   SpdmMeasurement.py meas_to_json --meas <measurement binary file> -o <evidence file>
-   OpaTool.py -e <evidence file> -r <signed reference json file> -o <OPA input file>
-   opa -i <OPA input file> -d <spdm policy rego file> "data.spdm"
+   SpdmMeasurement.py meas_to_json --meas SampleEvidence/device_measurement.bin -o SampleEvidence/SpdmSampleMeasurement.json
+   OpaTool.py -e SampleEvidence/SpdmSampleMeasurement.json -r SampleManifests/SpdmSampleCoMid.corim.jason -o opa.input
+   opa -i opa.input -d SpdmSamplePolicy.rego "data.spdm"
    ```
