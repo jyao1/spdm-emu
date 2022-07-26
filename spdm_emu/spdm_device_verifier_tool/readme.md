@@ -75,7 +75,7 @@ The tools can also verify the CoRIM(CoSWID/CoMID) based upon SPDM measurement ru
 
 #### Prepare SPDM measurement evidence
 
-   `SpdmMeasurement.py meas_to_json --meas <measurement binary file> -o <evidence file>` 
+   `SpdmMeasurement.py meas_to_json --meas <measurement binary file> --alg <hash algo - sha256|sha384|sha512> -o <evidence file>` 
 
    Evidence file is JSON format.
 
