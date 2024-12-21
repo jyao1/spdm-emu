@@ -38,7 +38,8 @@ This document describes spdm_requester_emu and spdm_responder_emu tool. It can b
          [--load_state <NegotiateStateFileName>]
          [--exe_mode SHUTDOWN|CONTINUE]
          [--exe_conn VER_ONLY|VCA|DIGEST|CERT|CHAL|MEAS|MEL|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO]
-         [--exe_session KEY_EX|PSK|NO_END|KEY_UPDATE|HEARTBEAT|MEAS|DIGEST|CERT|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO|APP]
+         [--exe_session KEY_EX|PSK|NO_END|KEY_UPDATE|HEARTBEAT|MEAS|DIGEST|CERT|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO|AUTH|APP]
+         [--auth_role USAP_INIT|USAP_TARGET|SEAP_INIT|SEAP_TARGET]
          [--pcap <PcapFileName>]
          [--priv_key_mode PEM|RAW]
          [--verbose | -v]
@@ -109,7 +110,7 @@ This document describes spdm_requester_emu and spdm_responder_emu tool. It can b
                  GET_KEY_PAIR_INFO means send GET_KEY_PAIR_INFO command.
                  SET_KEY_PAIR_INFO means send SET_KEY_PAIR_INFO command.
                  EP_INFO means send GET_ENDPOINT_INFO command.
-         [--exe_session] is used to control the SPDM session. By default, it is KEY_EX,PSK,KEY_UPDATE,HEARTBEAT,MEAS,MEL,DIGEST,CERT,GET_CSR,SET_CERT,GET_KEY_PAIR_INFO,SET_KEY_PAIR_INFO,EP_INFO,APP.
+         [--exe_session] is used to control the SPDM session. By default, it is KEY_EX,PSK,KEY_UPDATE,HEARTBEAT,MEAS,MEL,DIGEST,CERT,GET_CSR,SET_CERT,GET_KEY_PAIR_INFO,SET_KEY_PAIR_INFO,EP_INFO,AUTH,APP.
                  KEY_EX means to setup KEY_EXCHANGE session.
                  PSK means to setup PSK_EXCHANGE session.
                  NO_END means to not send END_SESSION.
@@ -124,7 +125,9 @@ This document describes spdm_requester_emu and spdm_responder_emu tool. It can b
                  GET_KEY_PAIR_INFO means send GET_KEY_PAIR_INFO command in session.
                  SET_KEY_PAIR_INFO means send SET_KEY_PAIR_INFO command in session.
                  EP_INFO means send GET_ENDPOINT_INFO command in session.
+                 AUTH means send AUTHORIZATION message in session.
                  APP means send vendor defined message or application message in session.
+         [--auth_role] is used to indicate the authorization session role. By default, all are supported.
          [--pcap] is used to generate PCAP dump file for offline analysis.
          [--priv_key_mode] is used to confirm private key mode with LIBSPDM_PRIVATE_KEY_USE_PEM.
          [--verbose | -v] is used to enable verbose output. By default, only errors and essential messages are printed. When enabled, detailed platform transport traces and hex dumps are shown.

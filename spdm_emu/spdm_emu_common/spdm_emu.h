@@ -87,6 +87,8 @@ extern bool m_support_pqc_first;
 extern uint8_t m_session_policy;
 extern uint8_t m_end_session_attributes;
 
+extern uint8_t m_support_auth_role;
+
 extern char *m_load_state_file_name;
 extern char *m_save_state_file_name;
 
@@ -122,6 +124,7 @@ extern uint32_t m_exe_connection;
 #define EXE_SESSION_GET_KEY_PAIR_INFO 0x1000
 #define EXE_SESSION_SET_KEY_PAIR_INFO 0x2000
 #define EXE_SESSION_EP_INFO 0x4000
+#define EXE_SESSION_AUTH 0x8000
 extern uint32_t m_exe_session;
 
 void libspdm_dump_hex_str(const uint8_t *buffer, size_t buffer_size);

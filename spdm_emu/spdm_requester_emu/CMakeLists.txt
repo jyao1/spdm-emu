@@ -51,6 +51,8 @@ set(spdm_requester_emu_LIBRARY
     pci_tdisp_requester_lib
     cxl_ide_km_requester_lib
     cxl_tsp_requester_lib
+    spdm_auth_requester_lib
+    spdm_auth_device_secret_lib_sample
     platform_lib
 )
 

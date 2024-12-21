@@ -337,6 +337,15 @@ void *spdm_server_init(void)
     libspdm_set_data(spdm_context, LIBSPDM_DATA_HEARTBEAT_PERIOD, &parameter,
                      &data8, sizeof(data8));
 
+    /*total key pair info number*/
+    data8 = libspdm_read_total_key_pairs(spdm_context);
+    libspdm_set_data(spdm_context, LIBSPDM_DATA_TOTAL_KEY_PAIRS, &parameter,
+                     &data8, sizeof(data8));
+
+    data8 = m_support_auth_role;
+    libspdm_set_data(spdm_context, LIBSPDM_DATA_AUTH_ROLE_MASK, &parameter,
+                     &data8, sizeof(data8));
+
     libspdm_register_get_response_func(
         spdm_context, spdm_get_response_vendor_defined_request);
 

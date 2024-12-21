@@ -91,6 +91,246 @@ libspdm_return_t get_digest_cert_in_session(const uint32_t *session_id)
     return status;
 }
 
+libspdm_return_t do_spdm_auth (void *spdm_context, uint32_t session_id)
+{
+    libspdm_return_t status;
+    uint8_t version_number_entry_count;
+    spdm_auth_version_number_t version_number_entry[1];
+    uint16_t message_caps;
+    uint16_t auth_process_caps;
+    uint8_t device_provisioning_state;
+    uint8_t auth_record_process_time;
+    uint64_t auth_base_asym_algo_supported;
+    uint64_t auth_base_hash_algo_supported;
+    uint16_t supported_policy_owner_id_count;
+    size_t supported_policy_owner_id_list_size;
+    uint8_t supported_policy_owner_id_list[sizeof(spdm_svh_dmtf_dsp_header_t) *
+                                           LIBSPDM_AUTH_MAX_POLICY_LIST_COUNT];
+    uint16_t credential_id;
+    uint16_t cred_attributes;
+    size_t cred_params_size;
+    uint8_t cred_params[sizeof(spdm_auth_credential_struct_t) +
+                        LIBSPDM_AUTH_MAX_CREDENTIAL_DATA_SIZE];
+    uint16_t policy_attributes;
+    size_t policy_list_size;
+    uint8_t policy_list[sizeof(spdm_auth_policy_list_t) +
+                        LIBSPDM_AUTH_MAX_POLICY_LIST_COUNT *
+                        sizeof(spdm_auth_policy_struct_for_dsp0289_t)];
+    libspdm_auth_session_process_type_t auth_session_process_type;
+    uint32_t saved_sequence_number;
+    size_t data_size;
+    libspdm_data_parameter_t parameter;
+    static bool ownership_taken = false;
+
+    libspdm_zero_mem(&parameter, sizeof(parameter));
+    parameter.location = LIBSPDM_DATA_LOCATION_SESSION;
+    *(uint32_t *)parameter.additional_data = session_id;
+    data_size = sizeof(auth_session_process_type);
+    auth_session_process_type = LIBSPDM_AUTH_SESSION_PROCESS_TYPE_NONE;
+    libspdm_get_data(spdm_context, LIBSPDM_DATA_AUTH_SESSION_PROCESS_TYPE, &parameter,
+                     &auth_session_process_type, &data_size);
+    printf("auth_session_type - %x\n", auth_session_process_type);
+
+    if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_NONE) {
+        return LIBSPDM_STATUS_SUCCESS;
+    }
+
+    version_number_entry_count = LIBSPDM_ARRAY_SIZE(version_number_entry);
+    status = libspdm_auth_get_auth_version (
+        spdm_context, session_id,
+        &version_number_entry_count, version_number_entry);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("auth_version count - %x\n", (uint32_t)version_number_entry_count);
+    printf("auth_version - %x\n", (uint32_t)version_number_entry[0]);
+
+    status = libspdm_auth_select_auth_version (
+        spdm_context, session_id,
+        version_number_entry[version_number_entry_count - 1] >> SPDM_AUTH_VERSION_NUMBER_SHIFT_BIT);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("select_auth_version - %x\n",
+           version_number_entry[version_number_entry_count - 1] >> SPDM_AUTH_VERSION_NUMBER_SHIFT_BIT);
+
+    supported_policy_owner_id_list_size = sizeof(supported_policy_owner_id_list);
+    status = libspdm_auth_get_auth_capabilities (
+        spdm_context, session_id,
+        &message_caps,
+        &auth_process_caps,
+        &device_provisioning_state,
+        &auth_record_process_time,
+        &auth_base_asym_algo_supported,
+        &auth_base_hash_algo_supported,
+        &supported_policy_owner_id_count,
+        &supported_policy_owner_id_list_size,
+        supported_policy_owner_id_list
+        );
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("auth_capabilities - done\n");
+
+    credential_id = 0;
+
+    if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_USAP) {
+        status = libspdm_auth_start_auth (spdm_context, session_id, credential_id, false, 0);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("start_auth - done\n");
+    } else if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_SEAP) {
+        status = libspdm_auth_elevate_privilege (spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("elevate_privilege - done\n");
+    }
+
+    cred_params_size = sizeof(cred_params);
+    status = libspdm_auth_get_cred_id_params (
+        spdm_context, session_id, true,
+        credential_id, &cred_attributes,
+        &cred_params_size, cred_params);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("cred_id_params - done\n");
+
+    status = libspdm_auth_set_cred_id_params (
+        spdm_context, session_id, true,
+        SPDM_AUTH_SET_CRED_INFO_OP_PARAMETER_CHANGE,
+        cred_params_size, cred_params);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("set_cred_id_params - done\n");
+
+    policy_list_size = sizeof(policy_list);
+    status = libspdm_auth_get_auth_policy (
+        spdm_context, session_id, true,
+        credential_id, &policy_attributes,
+        &policy_list_size, policy_list);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("auth_policy - done\n");
+
+    status = libspdm_auth_set_auth_policy (
+        spdm_context, session_id, true,
+        SPDM_AUTH_SET_AUTH_POLICY_OP_POLICY_CHANGE,
+        policy_list_size, policy_list);
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("set_auth_policy - done\n");
+
+    if (!ownership_taken) {
+        status = libspdm_auth_take_ownership (spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("take_ownership - done\n");
+        ownership_taken = true;
+    }
+
+    status = libspdm_auth_auth_reset_to_default (
+        spdm_context, session_id,
+        SPDM_AUTH_RESET_TO_DEFAULT_DATA_TYPE_CRED_ID_PARAMS, credential_id,
+        0, 0, NULL
+        );
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("auth_reset_to_default - done\n");
+
+    /* start_auth again cause reset_to_default will terminate auth session */
+    if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_USAP) {
+        status = libspdm_auth_start_auth (spdm_context, session_id, credential_id, false, 0);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("start_auth - done\n");
+    } else if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_SEAP) {
+        status = libspdm_auth_elevate_privilege (spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("elevate_privilege - done\n");
+    }
+
+    status = libspdm_auth_auth_reset_to_default (
+        spdm_context, session_id,
+        SPDM_AUTH_RESET_TO_DEFAULT_DATA_TYPE_AUTH_POLICY, credential_id,
+        0, 0, NULL
+        );
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        return status;
+    }
+    printf("auth_reset_to_default - done\n");
+
+    /* start_auth again to test reset auth session */
+    if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_USAP) {
+        status = libspdm_auth_start_auth (spdm_context, session_id, credential_id, false, 0);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("start_auth - done\n");
+    } else if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_SEAP) {
+        status = libspdm_auth_elevate_privilege (spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("elevate_privilege - done\n");
+    }
+
+    if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_USAP) {
+        /* Test USAP continuation: persist the USAS then resume it */
+        saved_sequence_number = 0;
+        status = libspdm_auth_end_auth (spdm_context, session_id, credential_id,
+                                        SPDM_AUTH_END_AUTH_ATTRIBUTES_PERSIST_METHOD_UNTIL_RESET,
+                                        &saved_sequence_number);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("end_auth (persist) - done, saved_seq_num - %x\n", saved_sequence_number);
+
+        /* Resume the saved USAS using the persisted sequence number */
+        status = libspdm_auth_start_auth (spdm_context, session_id, credential_id,
+                                          true, saved_sequence_number);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("start_auth (continue) - done\n");
+
+        cred_params_size = sizeof(cred_params);
+        status = libspdm_auth_get_cred_id_params (
+            spdm_context, session_id, true,
+            credential_id, &cred_attributes,
+            &cred_params_size, cred_params);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("cred_id_params (after continue) - done\n");
+
+        status = libspdm_auth_end_auth (spdm_context, session_id, credential_id,
+                                        SPDM_AUTH_END_AUTH_ATTRIBUTES_PERSIST_METHOD_ERASE, NULL);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("end_auth - done\n");
+    } else if (auth_session_process_type == LIBSPDM_AUTH_SESSION_PROCESS_TYPE_SEAP) {
+        status = libspdm_auth_end_elevated_privilege (spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            return status;
+        }
+        printf("end_elevated_privilege - done\n");
+    }
+
+    return LIBSPDM_STATUS_SUCCESS;
+}
+
 libspdm_return_t do_session_via_spdm(bool use_psk)
 {
     void *spdm_context;
@@ -262,6 +502,14 @@ libspdm_return_t do_session_via_spdm(bool use_psk)
         if (LIBSPDM_STATUS_IS_ERROR(status)) {
             EMU_ERR("do_certificate_provising_via_spdm - %x\n",
                    (uint32_t)status);
+            return status;
+        }
+    }
+
+    if ((m_exe_session & EXE_SESSION_AUTH) != 0) {
+        status = do_spdm_auth(spdm_context, session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            printf("do_spdm_auth - %x\n", (uint32_t)status);
             return status;
         }
     }

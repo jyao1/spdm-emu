@@ -327,6 +327,10 @@ void *spdm_client_init(void)
     libspdm_set_data(spdm_context, LIBSPDM_DATA_KEM_ALG, &parameter,
                      &data32, sizeof(data32));
 
+    data8 = m_support_auth_role;
+    libspdm_set_data(spdm_context, LIBSPDM_DATA_AUTH_ROLE_MASK, &parameter,
+                     &data8, sizeof(data8));
+
     if (m_load_state_file_name == NULL) {
         /* Skip if state is loaded*/
         status = libspdm_init_connection(

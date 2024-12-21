@@ -30,7 +30,7 @@ uint32_t m_exe_session =
      EXE_SESSION_SET_CERT | EXE_SESSION_GET_CSR |
      EXE_SESSION_GET_KEY_PAIR_INFO | EXE_SESSION_SET_KEY_PAIR_INFO |
      EXE_SESSION_DIGEST | EXE_SESSION_CERT | EXE_SESSION_APP |
-     EXE_SESSION_EP_INFO | 0);
+     EXE_SESSION_EP_INFO | EXE_SESSION_AUTH | 0);
 
 #define IP_ADDRESS "127.0.0.1"
 
@@ -80,7 +80,8 @@ void print_usage(const char *name)
     printf("   [--load_state <NegotiateStateFileName>]\n");
     printf("   [--exe_mode SHUTDOWN|CONTINUE]\n");
     printf("   [--exe_conn VER_ONLY|VCA|DIGEST|CERT|CHAL|MEAS|MEL|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO]\n");
-    printf("   [--exe_session KEY_EX|PSK|NO_END|KEY_UPDATE|HEARTBEAT|MEAS|MEL|DIGEST|CERT|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO|APP]\n");
+    printf("   [--exe_session KEY_EX|PSK|NO_END|KEY_UPDATE|HEARTBEAT|MEAS|MEL|DIGEST|CERT|GET_CSR|SET_CERT|GET_KEY_PAIR_INFO|SET_KEY_PAIR_INFO|EP_INFO|AUTH|APP]\n");
+    printf("   [--auth_role USAP_INIT|USAP_TARGET|SEAP_INIT|SEAP_TARGET]\n");
     printf("   [--pcap <pcap_file_name>]\n");
     printf("   [--priv_key_mode PEM|RAW]\n");
     printf("   [--verbose | -v]\n");
@@ -187,7 +188,7 @@ void print_usage(const char *name)
     printf("           SET_KEY_PAIR_INFO means send SET_KEY_PAIR_INFO command.\n");
     printf("           EP_INFO means send GET_ENDPOINT_INFO command.\n");
     printf(
-        "   [--exe_session] is used to control the SPDM session. By default, it is KEY_EX,PSK,KEY_UPDATE,HEARTBEAT,MEAS,MEL,DIGEST,CERT,GET_CSR,SET_CERT,GET_KEY_PAIR_INFO,SET_KEY_PAIR_INFO,EP_INFO,APP.\n");
+        "   [--exe_session] is used to control the SPDM session. By default, it is KEY_EX,PSK,KEY_UPDATE,HEARTBEAT,MEAS,MEL,DIGEST,CERT,GET_CSR,SET_CERT,GET_KEY_PAIR_INFO,SET_KEY_PAIR_INFO,EP_INFO,AUTH,APP.\n");
     printf("           KEY_EX means to setup KEY_EXCHANGE session.\n");
     printf("           PSK means to setup PSK_EXCHANGE session.\n");
     printf("           NO_END means to not send END_SESSION.\n");
@@ -202,7 +203,9 @@ void print_usage(const char *name)
     printf("           GET_KEY_PAIR_INFO means send GET_KEY_PAIR_INFO command in session.\n");
     printf("           SET_KEY_PAIR_INFO means send SET_KEY_PAIR_INFO command in session.\n");
     printf("           EP_INFO means send GET_ENDPOINT_INFO command in session.\n");
+    printf("           AUTH means send AUTHORIZATION message in session.\n");
     printf("           APP means send vendor defined message or application message in session.\n");
+    printf("   [--auth_role] is used to indicate the authorization session role. By default, all are supported.\n");
     printf("   [--pcap] is used to generate PCAP dump file for offline analysis.\n");
     printf(
         "   [--priv_key_mode] is uesed to confirm private key mode with LIBSPDM_PRIVATE_KEY_USE_PEM.\n");
@@ -496,6 +499,14 @@ value_string_entry_t m_exe_session_string_table[] = {
     { EXE_SESSION_GET_CSR, "GET_CSR" },
     { EXE_SESSION_APP, "APP" },
     { EXE_SESSION_EP_INFO, "EP_INFO" },
+    { EXE_SESSION_AUTH, "AUTH" },
+};
+
+value_string_entry_t m_auth_role_string_table[] = {
+    { LIBSPDM_AUTH_ROLE_USAP_INITIATOR, "USAP_INIT" },
+    { LIBSPDM_AUTH_ROLE_USAP_TARGET, "USAP_TARGET" },
+    { LIBSPDM_AUTH_ROLE_SEAP_INITIATOR, "SEAP_INIT" },
+    { LIBSPDM_AUTH_ROLE_SEAP_TARGET, "SEAP_TARGET" },
 };
 
 bool get_value_from_name(const value_string_entry_t *table,
@@ -1386,6 +1397,29 @@ void process_args(char *program_name, int argc, char *argv[])
                 continue;
             } else {
                 printf("invalid --exe_session\n");
+                print_usage(program_name);
+                exit(0);
+            }
+        }
+
+        if (strcmp(argv[0], "--auth_role") == 0) {
+            if (argc >= 2) {
+                if (!get_flags_from_name(
+                        m_auth_role_string_table,
+                        LIBSPDM_ARRAY_SIZE(
+                            m_auth_role_string_table),
+                        argv[1], &m_support_auth_role)) {
+                    printf("invalid --auth_role %s\n",
+                           argv[1]);
+                    print_usage(program_name);
+                    exit(0);
+                }
+                printf("auth_role - 0x%08x\n", m_support_auth_role);
+                argc -= 2;
+                argv += 2;
+                continue;
+            } else {
+                printf("invalid --auth_role\n");
                 print_usage(program_name);
                 exit(0);
             }

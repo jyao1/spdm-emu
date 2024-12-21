@@ -51,6 +51,8 @@ set(spdm_responder_emu_LIBRARY
     cxl_ide_km_device_lib_sample
     cxl_tsp_responder_lib
     cxl_tsp_device_lib_sample
+    spdm_auth_responder_lib
+    spdm_auth_device_secret_lib_sample
     platform_lib
 )
 

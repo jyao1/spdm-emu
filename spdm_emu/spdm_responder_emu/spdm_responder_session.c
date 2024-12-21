@@ -37,19 +37,47 @@ libspdm_return_t spdm_get_response_vendor_defined_request(
     void *response)
 {
     libspdm_return_t status;
+    const pci_doe_spdm_vendor_defined_request_t *spdm_pci_doe_request;
+    const spdm_auth_vendor_defined_request_t *spdm_auth_request;
 
     if (m_use_transport_layer == SOCKET_TRANSPORT_TYPE_PCI_DOE) {
         LIBSPDM_ASSERT(!is_app_message);
-        status = pci_doe_get_response_spdm_vendor_defined_request (
-            m_pci_doe_context, spdm_context, session_id,
-            request, request_size, response, response_size);
+        spdm_pci_doe_request = request;
+        if (spdm_pci_doe_request->pci_doe_vendor_header.standard_id == SPDM_REGISTRY_ID_PCISIG) {
+            status = pci_doe_get_response_spdm_vendor_defined_request (
+                m_pci_doe_context, spdm_context, session_id,
+                request, request_size, response, response_size);
+        } else {
+            spdm_auth_request = request;
+            if ((session_id != NULL) &&
+                (spdm_auth_request->auth_vendor_header.standard_id == SPDM_REGISTRY_ID_DMTF_DSP) &&
+                (spdm_auth_request->auth_vendor_header.dmtf_spec_id == 289)) {
+                status = libspdm_auth_get_response_vendor_defined_request (
+                    spdm_context, *session_id,
+                    request, request_size,
+                    response, response_size
+                    );
+            }
+        }
     }
 
     if (m_use_transport_layer == SOCKET_TRANSPORT_TYPE_MCTP) {
-        LIBSPDM_ASSERT(is_app_message);
-        status = mctp_get_response_secured_app_request (
-            m_mctp_context, spdm_context, session_id,
-            request, request_size, response, response_size);
+        if (is_app_message) {
+            status = mctp_get_response_secured_app_request(
+                m_mctp_context, spdm_context, session_id,
+                request, request_size, response, response_size);
+        } else {
+            spdm_auth_request = request;
+            if ((session_id != NULL) &&
+                (spdm_auth_request->auth_vendor_header.standard_id == SPDM_REGISTRY_ID_DMTF_DSP) &&
+                (spdm_auth_request->auth_vendor_header.dmtf_spec_id == 289)) {
+                status = libspdm_auth_get_response_vendor_defined_request (
+                    spdm_context, *session_id,
+                    request, request_size,
+                    response, response_size
+                    );
+            }
+        }
     }
 
     if ((m_use_transport_layer == SOCKET_TRANSPORT_TYPE_PCI_DOE) ||
