@@ -100,6 +100,29 @@ bool platform_server(const SOCKET socket)
 #endif /*(LIBSPDM_ENABLE_CAPABILITY_ENDPOINT_INFO_CAP) || (LIBSPDM_ENABLE_CAPABILITY_ENCAP_CAP)*/
             break;
 
+        case SOCKET_SPDM_COMMAND_OOB_ENCAP_AUTH_EVENT:
+#if (LIBSPDM_ENABLE_CAPABILITY_ENCAP_CAP) && (LIBSPDM_ENABLE_CAPABILITY_EVENT_CAP)
+            if (m_send_receive_buffer_size == sizeof(session_id)) {
+                session_id = *(uint32_t *)m_send_receive_buffer;
+            } else {
+                session_id = 0;
+            }
+            libspdm_init_send_event_encap_state(m_spdm_context, session_id);
+            result = send_platform_data(
+                socket,
+                SOCKET_SPDM_COMMAND_OOB_ENCAP_AUTH_EVENT, NULL,
+                0);
+            if (!result) {
+#ifdef _MSC_VER
+                EMU_ERR("send_platform_data Error - %x\n", WSAGetLastError());
+#else
+                EMU_ERR("send_platform_data Error - %x\n", errno);
+#endif
+                return true;
+            }
+#endif /*(LIBSPDM_ENABLE_CAPABILITY_ENCAP_CAP) && (LIBSPDM_ENABLE_CAPABILITY_EVENT_CAP)*/
+            break;
+
         case SOCKET_SPDM_COMMAND_SHUTDOWN:
             result = send_platform_data(
                 socket, SOCKET_SPDM_COMMAND_SHUTDOWN, NULL, 0);

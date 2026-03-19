@@ -5,6 +5,7 @@
  **/
 
 #include "spdm_requester_emu.h"
+#include "industry_standard/spdm_authorization.h"
 
 #if (LIBSPDM_ENABLE_CAPABILITY_KEY_EX_CAP || LIBSPDM_ENABLE_CAPABILITY_PSK_CAP)
 
@@ -41,6 +42,60 @@ libspdm_return_t do_set_key_pair_info_via_spdm(const uint32_t *session_id);
 libspdm_return_t pci_doe_process_session_message(void *spdm_context, uint32_t session_id);
 libspdm_return_t mctp_process_session_message(void *spdm_context, uint32_t session_id);
 libspdm_return_t do_certificate_provising_via_spdm(uint32_t* session_id);
+
+#if LIBSPDM_EVENT_RECIPIENT_SUPPORT
+/*
+ * Callback invoked for each incoming authorization event (DSP0289 sec. 11).
+ * Prints the event type so the test output is verifiable.
+ */
+static libspdm_return_t spdm_auth_process_event(
+    void *spdm_context,
+    uint32_t session_id,
+    uint32_t event_instance_id,
+    uint8_t svh_id,
+    uint8_t svh_vendor_id_len,
+    const void *svh_vendor_id,
+    uint16_t event_type_id,
+    uint16_t event_detail_len,
+    const void *event_detail)
+{
+    (void)spdm_context;
+    (void)event_detail;
+
+    /* Verify this is an Authorization event from DMTF-DSP (vendor_id = 289). */
+    if (svh_id == SPDM_REGISTRY_ID_DMTF_DSP &&
+        svh_vendor_id_len >= sizeof(uint16_t)) {
+        uint16_t vendor_id;
+        /* read little-endian uint16 without internal helper */
+        vendor_id = (uint16_t)(((const uint8_t *)svh_vendor_id)[0]) |
+                    (uint16_t)(((const uint8_t *)svh_vendor_id)[1] << 8);
+
+        if (vendor_id == SPDM_AUTH_EVENT_GROUP_VENDOR_ID) {
+            switch (event_type_id) {
+            case SPDM_AUTH_EVENT_TYPE_CRED_ID_PARAMS_CHANGED:
+                printf("auth_event [session=0x%x, id=%u]: CredIDparamsChanged received"
+                       " (detail_len=%u)\n",
+                       session_id, event_instance_id, (unsigned)event_detail_len);
+                break;
+            case SPDM_AUTH_EVENT_TYPE_AUTH_POLICY_CHANGED:
+                printf("auth_event [session=0x%x, id=%u]: AuthPolicyChanged received"
+                       " (detail_len=%u)\n",
+                       session_id, event_instance_id, (unsigned)event_detail_len);
+                break;
+            default:
+                printf("auth_event [session=0x%x, id=%u]: unknown auth event type %u\n",
+                       session_id, event_instance_id, (unsigned)event_type_id);
+                break;
+            }
+        }
+    } else {
+        printf("auth_event [session=0x%x, id=%u]: non-auth event svh_id=%u type=%u\n",
+               session_id, event_instance_id, (unsigned)svh_id, (unsigned)event_type_id);
+    }
+
+    return LIBSPDM_STATUS_SUCCESS;
+}
+#endif /* LIBSPDM_EVENT_RECIPIENT_SUPPORT */
 
 libspdm_return_t do_app_session_via_spdm(uint32_t session_id)
 {
@@ -121,6 +176,11 @@ libspdm_return_t do_spdm_auth (void *spdm_context, uint32_t session_id)
     size_t data_size;
     libspdm_data_parameter_t parameter;
     static bool ownership_taken = false;
+#if LIBSPDM_EVENT_RECIPIENT_SUPPORT
+    bool result;
+    uint32_t response;
+    size_t response_size;
+#endif
 
     libspdm_zero_mem(&parameter, sizeof(parameter));
     parameter.location = LIBSPDM_DATA_LOCATION_SESSION;
@@ -171,6 +231,19 @@ libspdm_return_t do_spdm_auth (void *spdm_context, uint32_t session_id)
         return status;
     }
     printf("auth_capabilities - done\n");
+
+#if LIBSPDM_EVENT_RECIPIENT_SUPPORT
+    /* Register the event callback and subscribe to all authorization events. */
+    libspdm_register_event_callback(spdm_context, spdm_auth_process_event);
+    status = libspdm_subscribe_event_types(spdm_context, session_id,
+                                           0, 0, NULL); /* subscribe ALL */
+    if (LIBSPDM_STATUS_IS_ERROR(status)) {
+        printf("libspdm_subscribe_event_types - %x (non-fatal)\n", (uint32_t)status);
+        status = LIBSPDM_STATUS_SUCCESS;
+    } else {
+        printf("subscribe_event_types (all) - done\n");
+    }
+#endif
 
     credential_id = 0;
 
@@ -327,6 +400,35 @@ libspdm_return_t do_spdm_auth (void *spdm_context, uint32_t session_id)
         }
         printf("end_elevated_privilege - done\n");
     }
+
+#if (LIBSPDM_EVENT_RECIPIENT_SUPPORT) && (LIBSPDM_ENABLE_CAPABILITY_ENCAP_CAP) && \
+    (LIBSPDM_ENABLE_CAPABILITY_EVENT_CAP)
+    /*
+     * Auth event test: ask the responder to send ENCAPSULATED SEND_EVENT.
+     * The responder calls libspdm_generate_event_list() which returns the
+     * CredIDparamsChanged and AuthPolicyChanged events queued during the
+     * SET_CRED_ID_PARAMS / SET_AUTH_POLICY calls above.
+     * The spdm_auth_process_event() callback will be invoked for each event.
+     */
+    response_size = 0;
+    result = communicate_platform_data(
+        m_socket,
+        SOCKET_SPDM_COMMAND_OOB_ENCAP_AUTH_EVENT,
+        (const uint8_t *)&session_id, sizeof(session_id),
+        &response, &response_size, NULL);
+    if (!result) {
+        printf("communicate_platform_data - SOCKET_SPDM_COMMAND_OOB_ENCAP_AUTH_EVENT fail\n");
+    } else {
+        status = libspdm_send_receive_encap_request(spdm_context, &session_id);
+        if (LIBSPDM_STATUS_IS_ERROR(status)) {
+            printf("libspdm_send_receive_encap_request - auth_event - %x\n",
+                   (uint32_t)status);
+        } else {
+            printf("auth_event encap exchange - done\n");
+        }
+        status = LIBSPDM_STATUS_SUCCESS;
+    }
+#endif /* LIBSPDM_EVENT_RECIPIENT_SUPPORT && ENCAP_CAP && EVENT_CAP */
 
     return LIBSPDM_STATUS_SUCCESS;
 }
